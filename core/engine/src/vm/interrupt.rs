@@ -9,8 +9,8 @@ use std::sync::atomic::{AtomicBool, Ordering};
 ///
 /// After [`InterruptHandle::request`], the context calls
 /// [`HostHooks::interrupt`][crate::context::HostHooks::interrupt] on its own
-/// thread, at the next loop iteration, call of a JavaScript function or return
-/// from one. The
+/// thread, at the next call of a JavaScript function or return from one, or
+/// within 1024 iterations of a loop. The
 /// hook then decides whether the evaluation goes on: a timeout stops it, a
 /// sampling profiler records the stack ([`Context::stack_trace`]) and lets it
 /// go on.

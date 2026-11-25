@@ -207,7 +207,8 @@ pub trait HostHooks {
 
     /// Called on the context's thread after an interrupt was requested
     /// through its [`InterruptHandle`][crate::vm::InterruptHandle], at the next
-    /// loop iteration, call of a JavaScript function or return from one.
+    /// call of a JavaScript function or return from one, or within 1024
+    /// iterations of a loop.
     ///
     /// Returning an error stops the evaluation with it. The hook may read the
     /// context, its stack trace ([`Context::stack_trace`]) for one, but should

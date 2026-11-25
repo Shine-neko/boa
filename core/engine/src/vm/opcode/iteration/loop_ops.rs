@@ -1,6 +1,9 @@
 use crate::error::RuntimeLimitError;
 use crate::{Context, JsResult, vm::opcode::Operation};
 
+/// Loop iterations between two checks for an interrupt request.
+const INTERRUPT_CHECK_ITERATIONS: u64 = 1024;
+
 /// `IncrementLoopIteration` implements the Opcode Operation for `Opcode::IncrementLoopIteration`.
 ///
 /// Operation:
@@ -20,7 +23,13 @@ impl IncrementLoopIteration {
         }
 
         frame.loop_iteration_count = previous_iteration_count.wrapping_add(1);
-        context.check_interrupt()
+        // Every 1024 iterations: a few microseconds more before an interrupt
+        // is handled make no difference to timeouts or sampling, and the
+        // check stays off the path of almost every iteration.
+        if previous_iteration_count.is_multiple_of(INTERRUPT_CHECK_ITERATIONS) {
+            context.check_interrupt()?;
+        }
+        Ok(())
     }
 }
 
