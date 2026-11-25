@@ -996,6 +996,7 @@ pub(crate) fn function_call(
     context: &mut InternalMethodCallContext<'_>,
 ) -> JsResult<CallValue> {
     context.check_runtime_limits()?;
+    context.check_interrupt()?;
 
     let function = function_object
         .downcast_ref::<OrdinaryFunction>()
@@ -1113,6 +1114,7 @@ fn function_construct(
     context: &mut InternalMethodCallContext<'_>,
 ) -> JsResult<CallValue> {
     context.check_runtime_limits()?;
+    context.check_interrupt()?;
 
     let function = this_function_object
         .downcast_ref::<OrdinaryFunction>()

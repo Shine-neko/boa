@@ -514,6 +514,14 @@ impl Context {
         self.kept_alive.clear();
     }
 
+    /// A handle to interrupt this context's evaluation from another thread,
+    /// and run [`HostHooks::interrupt`] on its thread.
+    #[inline]
+    #[must_use]
+    pub fn interrupt_handle(&self) -> crate::vm::InterruptHandle {
+        self.vm.interrupt.clone()
+    }
+
     /// Retrieves the current stack trace of the context.
     ///
     /// The stack trace is returned ordered with the most recent frames first.

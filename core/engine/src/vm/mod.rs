@@ -34,6 +34,7 @@ pub(crate) use {
     inline_cache::InlineCache,
 };
 
+pub use interrupt::InterruptHandle;
 pub use runtime_limits::RuntimeLimits;
 pub use {
     call_frame::{CallFrame, GeneratorResumeKind},
@@ -47,6 +48,7 @@ mod call_frame;
 mod code_block;
 mod completion_record;
 mod inline_cache;
+mod interrupt;
 mod runtime_limits;
 
 pub(crate) mod opcode;
@@ -95,6 +97,9 @@ pub struct Vm {
     pub(crate) host_call_depth: usize,
 
     pub(crate) shadow_stack: ShadowStack,
+
+    /// Interrupts requested from other threads, see [`InterruptHandle`].
+    pub(crate) interrupt: InterruptHandle,
 
     #[cfg(feature = "trace")]
     pub(crate) trace: bool,
@@ -421,6 +426,7 @@ impl Vm {
             native_active_function: None,
             host_call_depth: 0,
             shadow_stack: ShadowStack::default(),
+            interrupt: InterruptHandle::default(),
             #[cfg(feature = "trace")]
             trace: false,
             #[cfg(feature = "trace")]
@@ -1030,6 +1036,25 @@ impl Context {
         }
 
         Ok(())
+    }
+
+    /// Runs [`HostHooks::interrupt`] if an interrupt was requested, see
+    /// [`InterruptHandle`].
+    ///
+    /// [`HostHooks::interrupt`]: crate::context::HostHooks::interrupt
+    #[inline]
+    pub(crate) fn check_interrupt(&mut self) -> JsResult<()> {
+        if self.vm.interrupt.is_requested() {
+            return self.run_interrupt();
+        }
+        Ok(())
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn run_interrupt(&mut self) -> JsResult<()> {
+        self.vm.interrupt.clear();
+        self.host_hooks().interrupt(self)
     }
 }
 

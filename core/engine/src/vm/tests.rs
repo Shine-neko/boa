@@ -680,3 +680,108 @@ fn with_object_environment_binding_deleted_in_unscopables() {
         TestAction::assert("strictThrew === true"),
     ]);
 }
+
+mod interrupt {
+    use std::cell::{Cell, RefCell};
+    use std::rc::Rc;
+
+    use crate::context::{ContextBuilder, HostHooks};
+    use crate::{Context, JsNativeError, JsResult, Source};
+
+    /// Counts its calls, records the functions on the stack, and stops the
+    /// evaluation after `stop_after` calls.
+    #[derive(Default)]
+    struct Hooks {
+        calls: Cell<u32>,
+        stop_after: Option<u32>,
+        stacks: RefCell<Vec<Vec<String>>>,
+        handle: RefCell<Option<crate::vm::InterruptHandle>>,
+    }
+
+    impl HostHooks for Hooks {
+        fn interrupt(&self, context: &mut Context) -> JsResult<()> {
+            self.calls.set(self.calls.get() + 1);
+            let stack = context
+                .stack_trace()
+                .map(|frame| frame.position().function_name.to_std_string_escaped())
+                .collect();
+            self.stacks.borrow_mut().push(stack);
+            if self.stop_after.is_some_and(|n| self.calls.get() >= n) {
+                return Err(JsNativeError::error().with_message("interrupted").into());
+            }
+            // Keep sampling, as a profiler would.
+            if let Some(handle) = &*self.handle.borrow() {
+                handle.request();
+            }
+            Ok(())
+        }
+    }
+
+    fn context(hooks: &Rc<Hooks>) -> Context {
+        ContextBuilder::default()
+            .host_hooks(hooks.clone())
+            .build()
+            .unwrap()
+    }
+
+    #[test]
+    fn is_not_called_without_a_request() {
+        let hooks = Rc::new(Hooks::default());
+        let mut context = context(&hooks);
+        let result = context
+            .eval(Source::from_bytes(
+                "let n = 0; function f() { return 1; } for (let i = 0; i < 1000; i++) n += f(); n",
+            ))
+            .unwrap();
+        assert_eq!(result.as_number(), Some(1000.0));
+        assert_eq!(hooks.calls.get(), 0);
+    }
+
+    #[test]
+    fn stops_an_endless_loop_from_another_thread() {
+        let hooks = Rc::new(Hooks {
+            stop_after: Some(1),
+            ..Hooks::default()
+        });
+        let mut context = context(&hooks);
+        let handle = context.interrupt_handle();
+        let thread = std::thread::spawn(move || {
+            std::thread::sleep(std::time::Duration::from_millis(50));
+            handle.request();
+        });
+        let error = context
+            .eval(Source::from_bytes("while (true) {}"))
+            .unwrap_err();
+        thread.join().unwrap();
+        assert_eq!(hooks.calls.get(), 1);
+        assert!(error.to_string().contains("interrupted"), "{error}");
+    }
+
+    #[test]
+    fn lets_the_evaluation_go_on_and_sees_the_stack() {
+        let hooks = Rc::new(Hooks::default());
+        let mut context = context(&hooks);
+        let handle = context.interrupt_handle();
+        *hooks.handle.borrow_mut() = Some(handle.clone());
+        handle.request();
+        let result = context
+            .eval(Source::from_bytes(
+                "function inner(i) { return i % 7; }\n\
+                 function outer() { let s = 0; for (let i = 0; i < 100; i++) s += inner(i); return s; }\n\
+                 outer()",
+            ))
+            .unwrap();
+        // The evaluation finished with the right result.
+        assert_eq!(result.as_number(), Some(295.0));
+        // Called at every loop iteration, call and return once re-requested.
+        assert!(hooks.calls.get() > 100, "{}", hooks.calls.get());
+        let stacks = hooks.stacks.borrow();
+        assert!(
+            stacks
+                .iter()
+                .any(|s| s.first().map(String::as_str) == Some("inner")
+                    && s.get(1).map(String::as_str) == Some("outer")),
+            "{stacks:?}"
+        );
+    }
+}

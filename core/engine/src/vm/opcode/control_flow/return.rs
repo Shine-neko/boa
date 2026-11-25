@@ -18,6 +18,12 @@ pub(crate) struct Return;
 impl Return {
     #[inline(always)]
     pub(crate) fn operation((): (), context: &mut Context) -> ControlFlow<CompletionRecord> {
+        // Checked while the function is still on the stack: a function
+        // without loops nor calls has no other point where an interrupt is
+        // handled, and a sampling profiler would count its time in its caller.
+        if let Err(err) = context.check_interrupt() {
+            return context.handle_error(err);
+        }
         context.handle_return()
     }
 }

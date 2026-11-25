@@ -95,6 +95,19 @@ impl CallFrame {
         &self.code_block
     }
 
+    /// Where the function of this frame starts in its source, as far as its
+    /// bytecode tells: the position of its first mapped instruction.
+    #[inline]
+    #[must_use]
+    pub fn function_position(&self) -> Option<Position> {
+        self.code_block
+            .source_info
+            .map()
+            .entries()
+            .iter()
+            .find_map(super::source_info::Entry::position)
+    }
+
     /// Retrieves a tuple of `(`[`JsString`]`, `[`SourcePath`]`, `[`Position`]`)` to know the
     /// location of the call frame.
     #[inline]

@@ -20,7 +20,7 @@ impl IncrementLoopIteration {
         }
 
         frame.loop_iteration_count = previous_iteration_count.wrapping_add(1);
-        Ok(())
+        context.check_interrupt()
     }
 }
 

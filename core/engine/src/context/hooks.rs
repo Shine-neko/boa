@@ -205,6 +205,21 @@ pub trait HostHooks {
             .map_or(0, UtcOffset::whole_seconds)
     }
 
+    /// Called on the context's thread after an interrupt was requested
+    /// through its [`InterruptHandle`][crate::vm::InterruptHandle], at the next
+    /// loop iteration, call of a JavaScript function or return from one.
+    ///
+    /// Returning an error stops the evaluation with it. The hook may read the
+    /// context, its stack trace ([`Context::stack_trace`]) for one, but should
+    /// not run JavaScript.
+    ///
+    /// # Errors
+    ///
+    /// The error stopping the evaluation, if it must stop.
+    fn interrupt(&self, _context: &mut Context) -> JsResult<()> {
+        Ok(())
+    }
+
     /// Gets the maximum size in bits that can be allocated for an `ArrayBuffer` or a
     /// `SharedArrayBuffer`.
     ///
